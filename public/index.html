@@ -2,19 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Multi Barcode Upload + Supabase</title>
+  <title>Upload & Scan Barcodes</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module">
     import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
 
     const SUPABASE_URL = 'https://wiklfzmcvmevdwpoofuc.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // use full key
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpa2xmem1jdm1ldmR3cG9vZnVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NTk5NTAsImV4cCI6MjA2ODIzNTk1MH0.ph15o1doNO3fE6VSuvRblmwNaC8py9ap6zRfZobAnQQ';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const codeReader = new BrowserMultiFormatReader();
 
-    async function scanAndSave(file) {
+    async function scanImageFile(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
+
         reader.onload = async () => {
           const img = new Image();
           img.src = reader.result;
@@ -22,35 +24,49 @@
           img.onload = async () => {
             try {
               const result = await codeReader.decodeFromImage(img);
+              console.log("Scanned:", result.text);
+
               const barcode = result.text;
-              const name = prompt(`Scanned: ${barcode}\nEnter product name:`);
+              const name = prompt(`Scanned: ${barcode}\n\nEnter product name:`);
               if (!name) return resolve();
 
-              const price = prompt(`Product: ${name}\nEnter price:`);
+              const price = prompt(`Product: ${name}\n\nEnter product price:`);
               if (!price) return resolve();
 
               const { error } = await supabase
                 .from('products')
                 .insert([{ barcode, name, price }]);
 
-              if (error) alert("❌ Error saving: " + error.message);
-              else alert("✅ Saved: " + barcode);
+              if (error) {
+                alert("❌ Error saving: " + error.message);
+              } else {
+                alert("✅ Saved: " + barcode);
+              }
 
               resolve();
             } catch (err) {
-              alert("❌ Couldn't scan this image: " + err.message);
+              console.error("Scan failed:", err);
+              alert("❌ Could not scan this image.");
               resolve();
             }
           };
+
+          img.onerror = () => {
+            alert("❌ Could not load image.");
+            resolve();
+          };
         };
+
         reader.readAsDataURL(file);
       });
     }
 
     document.getElementById("upload").addEventListener("change", async (e) => {
       const files = Array.from(e.target.files);
+      if (!files.length) return;
+
       for (const file of files) {
-        await scanAndSave(file);
+        await scanImageFile(file);
       }
     });
 
@@ -60,12 +76,14 @@
 
       try {
         const result = await codeReader.decodeOnceFromVideoDevice(undefined, video);
+        const barcode = result.text;
+
         video.srcObject.getTracks().forEach(track => track.stop());
         video.style.display = "none";
 
-        const barcode = result.text;
         const name = prompt(`Scanned: ${barcode}\nEnter product name:`);
         if (!name) return;
+
         const price = prompt(`Product: ${name}\nEnter price:`);
         if (!price) return;
 
@@ -73,25 +91,31 @@
           .from('products')
           .insert([{ barcode, name, price }]);
 
-        if (error) alert("❌ Error saving: " + error.message);
-        else alert("✅ Saved: " + barcode);
+        if (error) {
+          alert("❌ Error saving: " + error.message);
+        } else {
+          alert("✅ Saved: " + barcode);
+        }
 
       } catch (err) {
-        alert("Camera scan failed: " + err.message);
+        alert("❌ Camera scan failed: " + err.message);
       }
     });
   </script>
 
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
-    input, button { width: 100%; padding: 10px; margin: 10px 0; }
-    video { width: 100%; display: none; border: 2px solid #000; margin-top: 10px; }
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    input, button { padding: 10px; margin: 10px 0; width: 100%; font-size: 16px; }
+    #video-preview { width: 100%; max-height: 300px; display: none; border: 2px solid black; }
   </style>
 </head>
 <body>
-  <h1>📦 Upload or Scan Barcodes</h1>
-  <button id="start-camera-scan">📸 Scan from Camera</button>
+  <h1>📷 Upload or Scan Barcodes</h1>
+
+  <button id="start-camera-scan">📸 Scan with Camera</button>
   <video id="video-preview"></video>
+
+  <h2>🖼️ Upload Barcode Images</h2>
   <input type="file" id="upload" accept="image/*" multiple />
 </body>
 </html>
