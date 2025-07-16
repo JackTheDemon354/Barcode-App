@@ -10,13 +10,19 @@
 </head>
 <body>
   <h1>📷 Scan a Barcode</h1>
+
   <video id="scanner" autoplay></video>
+  <br />
+  
+  <label for="upload">Or upload an image (PNG, JPG, JPEG, SVG):</label>
+  <input type="file" id="upload" accept=".png,.jpg,.jpeg,.svg" />
+
   <div id="list"></div>
 
   <script src="https://unpkg.com/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
   <script>
     const list = document.getElementById('list');
-    const API = 'https://barcode-app-rpjp.onrender.com';
+    const API = 'https://barcode-app-rpjp.onrender.com'; // Change to your backend URL
 
     const addItemToList = (item) => {
       const div = document.createElement('div');
@@ -53,6 +59,7 @@
       }
     };
 
+    // Camera live scan
     let lastCode = '';
     let lastTime = 0;
 
@@ -62,7 +69,9 @@
         target: document.querySelector('#scanner'),
         constraints: { facingMode: "environment" }
       },
-      decoder: { readers: ["ean_reader", "code_128_reader"] }
+      decoder: {
+        readers: ["code_128_reader", "ean_reader", "ean_8_reader"]
+      }
     }, err => {
       if (err) return console.error(err);
       Quagga.start();
@@ -76,6 +85,33 @@
         lastTime = now;
         handleScan(code);
       }
+    });
+
+    // Image file scan
+    document.getElementById('upload').addEventListener('change', function() {
+      const file = this.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        Quagga.decodeSingle({
+          src: e.target.result,
+          numOfWorkers: 0,  // Needs to be 0 when used with decodeSingle
+          inputStream: {
+            size: 800  // restrict input-size for faster processing
+          },
+          decoder: {
+            readers: ["code_128_reader", "ean_reader", "ean_8_reader"]
+          }
+        }, function(result) {
+          if(result && result.codeResult) {
+            handleScan(result.codeResult.code);
+          } else {
+            alert('Barcode not detected in image.');
+          }
+        });
+      };
+      reader.readAsDataURL(file);
     });
   </script>
 </body>
