@@ -3,14 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <title>Upload & Scan Barcodes</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    input, button { padding: 10px; margin: 10px 0; width: 100%; font-size: 16px; }
+    #video-preview { width: 100%; max-height: 300px; display: none; border: 2px solid black; }
+  </style>
+</head>
+<body>
+  <h1>📷 Upload or Scan Barcodes</h1>
+
+  <button id="start-camera-scan">📸 Scan with Camera</button>
+  <video id="video-preview"></video>
+
+  <h2>🖼️ Upload Barcode Images</h2>
+  <input type="file" id="upload" accept="image/*" multiple />
+
   <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
     import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
 
     const SUPABASE_URL = 'https://wiklfzmcvmevdwpoofuc.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpa2xmem1jdm1ldmR3cG9vZnVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NTk5NTAsImV4cCI6MjA2ODIzNTk1MH0.ph15o1doNO3fE6VSuvRblmwNaC8py9ap6zRfZobAnQQ';
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const codeReader = new BrowserMultiFormatReader();
 
     async function scanImageFile(file) {
@@ -23,7 +38,7 @@
 
           img.onload = async () => {
             try {
-              const result = await codeReader.decodeFromImage(img);
+              const result = await codeReader.decodeOnceFromImageElement(img);
               console.log("Scanned:", result.text);
 
               const barcode = result.text;
@@ -102,20 +117,5 @@
       }
     });
   </script>
-
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
-    input, button { padding: 10px; margin: 10px 0; width: 100%; font-size: 16px; }
-    #video-preview { width: 100%; max-height: 300px; display: none; border: 2px solid black; }
-  </style>
-</head>
-<body>
-  <h1>📷 Upload or Scan Barcodes</h1>
-
-  <button id="start-camera-scan">📸 Scan with Camera</button>
-  <video id="video-preview"></video>
-
-  <h2>🖼️ Upload Barcode Images</h2>
-  <input type="file" id="upload" accept="image/*" multiple />
 </body>
 </html>
