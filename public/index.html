@@ -2,86 +2,125 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Barcode Shopping List</title>
+  <title>Multi-Barcode Scanner</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module">
+    import {
+      BrowserMultiFormatReader
+    } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm";
+
+    // Supabase setup
+    const SUPABASE_URL = 'https://wiklfzmcvmevdwpoofuc.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpa2xmem1jdm1ldmR3cG9vZnVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NTk5NTAsImV4cCI6MjA2ODIzNTk1MH0.ph15o1doNO3fE6VSuvRblmwNaC8py9ap6zRfZobAnQQ';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const codeReader = new BrowserMultiFormatReader();
+
+    async function scanAndSaveImage(file) {
+      return new Promise((resolve) => {
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file);
+
+        img.onload = async () => {
+          try {
+            const result = await codeReader.decodeFromImage(img);
+            const barcode = result.text;
+            const name = prompt(`Scanned: ${barcode}\nEnter product name:`);
+            if (!name) return resolve();
+
+            const price = prompt(`Product: ${name}\nEnter price:`);
+            if (!price) return resolve();
+
+            const { error } = await supabase
+              .from('products')
+              .insert([{ barcode, name, price }]);
+
+            if (error) {
+              alert(`❌ Failed to save ${barcode}: ` + error.message);
+            } else {
+              alert(`✅ Saved: ${barcode}`);
+            }
+            resolve();
+          } catch (err) {
+            alert(`❌ Couldn't read this image: ${err.message}`);
+            resolve();
+          }
+        };
+      });
+    }
+
+    document.getElementById("upload").addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      for (const file of files) {
+        await scanAndSaveImage(file);
+      }
+    });
+
+    document.getElementById("start-camera-scan").addEventListener("click", async () => {
+      const preview = document.getElementById("video-preview");
+      preview.style.display = "block";
+
+      try {
+        const result = await codeReader.decodeOnceFromVideoDevice(undefined, preview);
+        codeReader.reset();
+        preview.srcObject.getTracks().forEach(track => track.stop());
+        preview.style.display = "none";
+
+        const barcode = result.text;
+        const name = prompt(`Scanned: ${barcode}\nEnter product name:`);
+        if (!name) return;
+
+        const price = prompt(`Product: ${name}\nEnter price:`);
+        if (!price) return;
+
+        const { error } = await supabase
+          .from('products')
+          .insert([{ barcode, name, price }]);
+
+        if (error) {
+          alert(`❌ Failed to save: ` + error.message);
+        } else {
+          alert(`✅ Saved: ${barcode}`);
+        }
+      } catch (err) {
+        alert("Camera Error: " + err.message);
+      }
+    });
+  </script>
+
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; }
-    ul { padding-left: 0; list-style: none; }
-    li { margin-bottom: 8px; background: #f0f0f0; padding: 8px; border-radius: 4px; }
-    input, button { padding: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+    }
+    button, input {
+      padding: 10px;
+      margin: 10px 0;
+      width: 100%;
+      font-size: 16px;
+    }
+    #video-preview {
+      width: 100%;
+      max-height: 300px;
+      display: none;
+      margin-top: 10px;
+      border: 2px solid #333;
+    }
   </style>
 </head>
 <body>
 
-  <h1>📦 My Barcode Shopping List</h1>
+  <h1>📷 Multi Barcode Scanner</h1>
 
-  <form id="product-form">
-    <input id="barcode" type="text" placeholder="Barcode Number" required />
-    <input id="name" type="text" placeholder="Product Name" required />
-    <input id="price" type="text" placeholder="Price (e.g. 1.20)" required />
-    <button type="submit">Add Product</button>
-  </form>
+  <button id="start-camera-scan">📸 Scan with Camera</button>
+  <video id="video-preview"></video>
 
-  <h2>Saved Products</h2>
-  <ul id="product-list"></ul>
-
-  <script>
-    const SUPABASE_URL = 'https://wiklfzmcvmevdwpoofuc.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpa2xmem1jdm1ldmR3cG9vZnVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NTk5NTAsImV4cCI6MjA2ODIzNTk1MH0.ph15o1doNO3fE6VSuvRblmwNaC8py9ap6zRfZobAnQQ';
-
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    async function loadProducts() {
-      const { data, error } = await supabase.from('products').select('*').order('id');
-      if (error) {
-        console.error('Error loading products:', error);
-        return;
-      }
-
-      const list = document.getElementById('product-list');
-      list.innerHTML = '';
-
-      if (data.length === 0) {
-        list.innerHTML = '<li>No products saved yet.</li>';
-        return;
-      }
-
-      data.forEach(product => {
-        const li = document.createElement('li');
-        li.textContent = `${product.barcode} — ${product.name} — $${product.price}`;
-        list.appendChild(li);
-      });
-    }
-
-    document.getElementById('product-form').addEventListener('submit', async e => {
-      e.preventDefault();
-
-      const barcode = document.getElementById('barcode').value.trim();
-      const name = document.getElementById('name').value.trim();
-      const price = document.getElementById('price').value.trim();
-
-      if (!barcode || !name || !price) {
-        alert('Please fill all fields');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{ barcode, name, price }]);
-
-      if (error) {
-        alert('Error adding product: ' + error.message);
-        return;
-      }
-
-      alert('✅ Product added!');
-      document.getElementById('product-form').reset();
-      loadProducts();
-    });
-
-    // Load products on page load
-    loadProducts();
-  </script>
+  <h2>🖼️ Or Upload Multiple Barcode Images</h2>
+  <input type="file" id="upload" accept="image/*" multiple />
 
 </body>
 </html>
