@@ -1,11 +1,16 @@
 const express = require('express');
 const fs = require('fs');
 const cors = require('cors');
+const path = require('path');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const DATA_FILE = './data.json';
+// Serve static files from 'public' folder (your index.html and others)
+app.use(express.static('public'));
+
+const DATA_FILE = path.join(__dirname, 'data.json');
 
 // Load data from file or start empty
 let products = {};
@@ -21,7 +26,7 @@ function saveData() {
   fs.writeFileSync(DATA_FILE, JSON.stringify(products, null, 2));
 }
 
-// Get product by barcode
+// API: Get product by barcode
 app.get('/product/:barcode', (req, res) => {
   const barcode = req.params.barcode;
   if (products[barcode]) {
@@ -31,17 +36,16 @@ app.get('/product/:barcode', (req, res) => {
   }
 });
 
-// Add new product or return existing
+// API: Add or update product
 app.post('/product', (req, res) => {
   const { barcode, name, price } = req.body;
   if (!barcode || !name || !price) {
     return res.status(400).json({ error: 'Missing fields' });
   }
-  if (!products[barcode]) {
-    products[barcode] = { barcode, name, price };
-    saveData();
-  }
+  products[barcode] = { barcode, name, price };
+  saveData();
   res.json(products[barcode]);
 });
 
-app.listen(3000, () => console.log('Server running on port 3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
