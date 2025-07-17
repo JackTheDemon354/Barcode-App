@@ -2,327 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Staff Portal - Manage Products & Cart</title>
+  <title>Staff Portal</title>
   <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm';
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
     const SUPABASE_URL = 'https://wiklfzmcvmevdwpoofuc.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indpa2xmem1jdm1ldmR3cG9vZnVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2NTk5NTAsImV4cCI6MjA2ODIzNTk1MH0.ph15o1doNO3fE6VSuvRblmwNaC8py9ap6zRfZobAnQQ'; // Replace with your anon key
-
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // your real anon key here
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const codeReader = new BrowserMultiFormatReader();
 
-    let cart = [];
-    let products = [];
+    const tableBody = document.getElementById('products');
 
-    function updateCartDisplay() {
-      const cartEl = document.getElementById('cart');
-      cartEl.innerHTML = '';
-      let total = 0;
-
-      cart.forEach((item, index) => {
-        const itemTotal = parseFloat(item.price) * item.quantity;
-        total += itemTotal;
-
-        const div = document.createElement('div');
-        div.textContent = `${item.name} (x${item.quantity}) - $${itemTotal.toFixed(2)}`;
-
-        const delBtn = document.createElement('button');
-        delBtn.textContent = 'Delete';
-        delBtn.style.marginLeft = '10px';
-        delBtn.onclick = () => {
-          cart.splice(index, 1);
-          updateCartDisplay();
-        };
-
-        div.appendChild(delBtn);
-        cartEl.appendChild(div);
-      });
-
-      document.getElementById('total').textContent = `Total: $${total.toFixed(2)}`;
-    }
-
-    // Load all products from Supabase
+    // Load all products
     async function loadProducts() {
-      const { data, error } = await supabase.from('products').select('*').order('id', { ascending: true });
+      const { data, error } = await supabase.from('products').select('*');
+      tableBody.innerHTML = ''; // Clear table
       if (error) {
-        alert('Error loading products: ' + error.message);
+        alert("Failed to load products: " + error.message);
         return;
       }
-      products = data;
-      renderProductTable();
+
+      for (const product of data) {
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+          <td>${product.barcode}</td>
+          <td contenteditable="true">${product.name}</td>
+          <td contenteditable="true">${product.price}</td>
+          <td>
+            <button onclick="updateProduct('${product.barcode}', this)">💾 Save</button>
+            <button onclick="deleteProduct('${product.barcode}')">🗑️ Delete</button>
+          </td>
+        `;
+
+        tableBody.appendChild(row);
+      }
     }
 
-    // Render products into the table with Edit/Delete
-    function renderProductTable() {
-      const tbody = document.getElementById('product-table-body');
-      tbody.innerHTML = '';
-
-      products.forEach(product => {
-        const tr = document.createElement('tr');
-
-        ['barcode', 'name', 'price'].forEach(field => {
-          const td = document.createElement('td');
-          td.textContent = product[field];
-          tr.appendChild(td);
-        });
-
-        // Edit button
-        const editTd = document.createElement('td');
-        const editBtn = document.createElement('button');
-        editBtn.textContent = 'Edit';
-        editBtn.onclick = () => openEditForm(product);
-        editTd.appendChild(editBtn);
-        tr.appendChild(editTd);
-
-        // Delete button
-        const deleteTd = document.createElement('td');
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.onclick = async () => {
-          if (confirm(`Delete product "${product.name}"?`)) {
-            const { error } = await supabase.from('products').delete().eq('id', product.id);
-            if (error) {
-              alert('Delete failed: ' + error.message);
-            } else {
-              alert('Deleted product.');
-              await loadProducts();
-            }
-          }
-        };
-        deleteTd.appendChild(deleteBtn);
-        tr.appendChild(deleteTd);
-
-        tbody.appendChild(tr);
-      });
-    }
-
-    // Add or Update product form submit
-    async function submitProductForm(e) {
+    // Add product
+    document.getElementById('add-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const form = e.target;
-      const id = form.dataset.editId;
-      const barcode = form.barcode.value.trim();
-      const name = form.name.value.trim();
-      const price = parseFloat(form.price.value);
+      const barcode = document.getElementById('barcode').value.trim();
+      const name = document.getElementById('name').value.trim();
+      const price = document.getElementById('price').value.trim();
 
-      if (!barcode || !name || isNaN(price)) {
-        alert('Please fill all fields correctly.');
-        return;
-      }
+      if (!barcode || !name || !price) return alert("Fill all fields!");
 
-      if (id) {
-        // Update existing product
-        const { error } = await supabase.from('products').update({ barcode, name, price }).eq('id', id);
-        if (error) {
-          alert('Update failed: ' + error.message);
-          return;
-        }
-        alert('Product updated.');
-      } else {
-        // Insert new product
-        const { error } = await supabase.from('products').insert([{ barcode, name, price }]);
-        if (error) {
-          alert('Insert failed: ' + error.message);
-          return;
-        }
-        alert('Product added.');
-      }
+      const { error } = await supabase.from('products').insert([{ barcode, name, price }]);
+      if (error) return alert("Failed to add product: " + error.message);
 
-      form.reset();
-      form.dataset.editId = '';
-      document.getElementById('submit-btn').textContent = 'Add Product';
+      document.getElementById('add-form').reset();
+      await loadProducts();
+    });
+
+    // Update product
+    window.updateProduct = async (barcode, btn) => {
+      const row = btn.closest('tr');
+      const name = row.children[1].innerText.trim();
+      const price = row.children[2].innerText.trim();
+
+      const { error } = await supabase
+        .from('products')
+        .update({ name, price })
+        .eq('barcode', barcode);
+
+      if (error) return alert("Failed to update: " + error.message);
+      alert("✅ Updated!");
+    };
+
+    // Delete product
+    window.deleteProduct = async (barcode) => {
+      const ok = confirm("Delete this product?");
+      if (!ok) return;
+
+      const { error } = await supabase.from('products').delete().eq('barcode', barcode);
+      if (error) return alert("Failed to delete: " + error.message);
 
       await loadProducts();
-    }
+    };
 
-    function openEditForm(product) {
-      const form = document.getElementById('product-form');
-      form.dataset.editId = product.id;
-      form.barcode.value = product.barcode;
-      form.name.value = product.name;
-      form.price.value = product.price;
-      document.getElementById('submit-btn').textContent = 'Update Product';
-    }
-
-    // Add product to cart by barcode
-    async function addToCartByBarcode(barcode) {
-      const product = products.find(p => p.barcode === barcode);
-      if (!product) {
-        alert('Product not found.');
-        return;
-      }
-
-      const existing = cart.find(item => item.barcode === product.barcode);
-      if (existing) {
-        existing.quantity++;
-      } else {
-        cart.push({ ...product, quantity: 1 });
-      }
-      updateCartDisplay();
-    }
-
-    // Manual add barcode button handler
-    async function handleManualAdd() {
-      const barcodeInput = document.getElementById('manual-barcode');
-      const barcode = barcodeInput.value.trim();
-      if (!barcode) {
-        alert('Please enter a barcode.');
-        return;
-      }
-      await addToCartByBarcode(barcode);
-      barcodeInput.value = '';
-    }
-
-    async function scanImageFile(file) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-
-        reader.onload = async () => {
-          const img = new Image();
-          img.src = reader.result;
-
-          img.onload = async () => {
-            try {
-              const result = await codeReader.decodeOnceFromImageElement(img);
-              const barcode = result.text;
-              await addToCartByBarcode(barcode);
-              resolve();
-            } catch {
-              alert('Could not scan this image.');
-              resolve();
-            }
-          };
-
-          img.onerror = () => {
-            alert('Could not load image.');
-            resolve();
-          };
-        };
-
-        reader.readAsDataURL(file);
-      });
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      loadProducts();
-
-      document.getElementById('product-form').addEventListener('submit', submitProductForm);
-
-      document.getElementById('manual-add-btn').addEventListener('click', handleManualAdd);
-
-      document.getElementById('start-camera-scan').addEventListener('click', async () => {
-        const video = document.getElementById('video-preview');
-        video.style.display = 'block';
-
-        try {
-          const result = await codeReader.decodeOnceFromVideoDevice(undefined, video);
-          const barcode = result.text;
-
-          video.srcObject.getTracks().forEach(track => track.stop());
-          video.style.display = 'none';
-
-          await addToCartByBarcode(barcode);
-
-        } catch (err) {
-          alert('Camera scan failed: ' + err.message);
-        }
-      });
-
-      document.getElementById('upload').addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files);
-        for (const file of files) {
-          await scanImageFile(file);
-        }
-      });
-    });
+    // Load on page load
+    loadProducts();
   </script>
-
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 700px;
-      margin: auto;
-      padding: 20px;
-    }
-    input, button {
-      padding: 10px;
-      margin: 5px 0;
-      font-size: 16px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-    #video-preview {
-      width: 100%;
-      max-height: 300px;
-      display: none;
-      border: 2px solid black;
-      margin-top: 10px;
-    }
-    #cart > div {
-      margin: 5px 0;
-    }
+    body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 8px; border: 1px solid #ccc; text-align: left; }
+    td[contenteditable] { background: #ffffe0; }
+    input, button { padding: 8px; margin: 5px 0; }
+    #add-form input { width: calc(100% / 3 - 10px); }
+    button { cursor: pointer; }
   </style>
 </head>
 <body>
-  <h1>Staff Portal - Manage Products & Cart</h1>
+  <h1>🛒 Staff Product Manager</h1>
 
-  <h2>Add / Edit Product</h2>
-  <form id="product-form">
-    <label>
-      Barcode:<br />
-      <input type="text" name="barcode" required />
-    </label><br />
-    <label>
-      Name:<br />
-      <input type="text" name="name" required />
-    </label><br />
-    <label>
-      Price:<br />
-      <input type="number" name="price" step="0.01" required />
-    </label><br />
-    <button type="submit" id="submit-btn">Add Product</button>
+  <form id="add-form">
+    <input id="barcode" placeholder="Barcode" required />
+    <input id="name" placeholder="Product Name" required />
+    <input id="price" placeholder="Price" required />
+    <button type="submit">➕ Add Product</button>
   </form>
 
-  <h2>All Products</h2>
   <table>
     <thead>
       <tr>
         <th>Barcode</th>
         <th>Name</th>
-        <th>Price ($)</th>
-        <th>Edit</th>
-        <th>Delete</th>
+        <th>Price</th>
+        <th>Actions</th>
       </tr>
     </thead>
-    <tbody id="product-table-body">
-      <!-- Filled by JS -->
-    </tbody>
+    <tbody id="products"></tbody>
   </table>
-
-  <hr />
-
-  <h2>Add to Cart</h2>
-  <input type="text" id="manual-barcode" placeholder="Enter barcode manually" />
-  <button id="manual-add-btn">Add to Cart</button>
-
-  <button id="start-camera-scan">📸 Scan with Camera</button>
-  <video id="video-preview"></video>
-
-  <h2>Upload Barcode Images</h2>
-  <input type="file" id="upload" accept="image/*" multiple />
-
-  <h2>Shopping Cart</h2>
-  <div id="cart"></div>
-  <div id="total">Total: $0.00</div>
 </body>
 </html>
